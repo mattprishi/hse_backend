@@ -1,4 +1,4 @@
 class PredictionError(Exception):
-    pass
+    ...
 
 

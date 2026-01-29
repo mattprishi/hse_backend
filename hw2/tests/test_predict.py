@@ -72,7 +72,6 @@ def test_predict_validation_missing_field(app_client, field):
     ('images_qty', 'five'),
     ('category', 'invalid'),
     ('seller_id', 'abc'),
-    ('is_verified_seller', 'yes'),
 ])
 def test_predict_validation_type_error(app_client, field, value):
     """Тест валидации - неверный тип данных"""

@@ -11,7 +11,8 @@ from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'hw2'))
+# sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'hw2'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'hw2'))
 from model import load_or_train_model
 
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +44,11 @@ async def process_message(msg_value: bytes, model):
 
     ad_repo = AdRepository()
     moderation_repo = ModerationResultRepository()
+
+    # Создаём запись если её нет
+    existing_task = await moderation_repo.get_by_id(item_id)
+    if not existing_task:
+        await moderation_repo.create(item_id)
 
     ad_data = await ad_repo.get_with_user(item_id)
     if not ad_data:

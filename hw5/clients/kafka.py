@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime
+from typing import Optional
 from aiokafka import AIOKafkaProducer
 from contextlib import asynccontextmanager
 from config import KAFKA_BOOTSTRAP_SERVERS
@@ -13,7 +14,7 @@ TOPIC_DLQ = "moderation_dlq"
 
 class KafkaClient:
     def __init__(self):
-        self.producer: AIOKafkaProducer | None = None
+        self.producer: Optional[AIOKafkaProducer] = None
 
     async def start(self):
         self.producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)

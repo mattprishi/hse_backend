@@ -1,6 +1,6 @@
-# HW4: Async Moderation with Kafka
+# HW5: Redis Caching
 
-Асинхронная обработка объявлений через Kafka с поддержкой DLQ и retry механизма.
+Кэширование результатов предсказаний с использованием Redis.
 
 ## Setup
 
@@ -14,12 +14,14 @@ docker-compose up -d
 - PostgreSQL на порту 5433
 - Redpanda (Kafka) на порту 9092
 - Redpanda Console на http://localhost:8080
+- Redis на порту 6379
 
 ### 2. Run migrations
 
 ```bash
 psql -d moderation -U user -h localhost -p 5433 -f migrations/V01__init_schema.sql
 psql -d moderation -U user -h localhost -p 5433 -f migrations/V02__moderation_results.sql
+psql -d moderation -U user -h localhost -p 5433 -f migrations/V03__add_is_closed.sql
 ```
 
 ### 3. Install dependencies
@@ -34,6 +36,8 @@ pip install -r requirements.txt
 export DATABASE_URL="postgresql://user@localhost:5433/moderation"
 export MODEL_PATH="model.pkl"
 export KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
+export REDIS_HOST="localhost"
+export REDIS_PORT="6379"
 ```
 
 ### 5. Run application
@@ -49,6 +53,23 @@ python -m workers.moderation_worker
 ```
 
 ## API Endpoints
+
+### POST /simple_predict
+
+Синхронное предсказание с кэшированием.
+
+**Request:**
+```json
+{"item_id": 1}
+```
+
+**Response:**
+```json
+{
+  "is_violation": true,
+  "probability": 0.87
+}
+```
 
 ### POST /async_predict
 
@@ -72,52 +93,42 @@ POST /async_predict?item_id=1
 
 Получает статус модерации.
 
-**Response (pending):**
+### POST /close
+
+Закрывает объявление, удаляет из Redis и PostgreSQL.
+
+**Request:**
+```json
+{"item_id": 1}
+```
+
+**Response:**
 ```json
 {
-  "task_id": 123,
-  "status": "pending",
-  "is_violation": null,
-  "probability": null
+  "status": "ok",
+  "message": "Ad 1 closed"
 }
 ```
 
-**Response (completed):**
-```json
-{
-  "task_id": 123,
-  "status": "completed",
-  "is_violation": true,
-  "probability": 0.87
-}
-```
+## Caching Strategy
 
-**Response (failed):**
-```json
-{
-  "task_id": 123,
-  "status": "failed",
-  "is_violation": null,
-  "probability": null,
-  "error": "Error message"
-}
-```
-
-## Architecture
-
-- **Kafka Producer**: Отправка задач модерации в очередь
-- **Kafka Consumer (Worker)**: Асинхронная обработка задач
-- **DLQ**: Обработка ошибок через Dead Letter Queue
-- **Retry**: Автоматические повторы при временных ошибках (до 3 попыток)
-- **Polling API**: Клиент проверяет статус через GET /moderation_result/{task_id}
-
-## Kafka Topics
-
-- `moderation` - основная очередь задач
-- `moderation_dlq` - очередь для ошибок
+- **TTL**: 60 секунд (баланс между актуальностью и снижением нагрузки)
+- **Pattern**: Cache-Aside (проверка кэша → БД → запись в кэш)
+- **Invalidation**: При закрытии объявления
 
 ## Run Tests
 
+Все тесты:
 ```bash
 pytest tests/ -v
+```
+
+Только интеграционные:
+```bash
+pytest -m integration -v
+```
+
+Только юнит-тесты:
+```bash
+pytest -m "not integration" -v
 ```

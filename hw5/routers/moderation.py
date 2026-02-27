@@ -3,14 +3,15 @@ from repositories.moderation_results import ModerationResultRepository
 from repositories.ads import AdRepository
 from models.moderation import AsyncPredictResponse, ModerationResultResponse
 from clients.kafka import kafka_client
-from errors import AdNotFoundError
-
 router = APIRouter()
 
 
 @router.post("/async_predict", response_model=AsyncPredictResponse)
 async def create_moderation_task(item_id: int):
-    moderation_repo = ModerationResultRepository()
+    ad_repo = AdRepository()
+    ad = await ad_repo.get_by_id(item_id)
+    if not ad:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
 
     try:
         await kafka_client.send_moderation_request(item_id)

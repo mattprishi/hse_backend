@@ -14,6 +14,8 @@ from main import app, get_app_state
 from repositories.users import UserRepository
 from repositories.ads import AdRepository
 from clients.postgres import init_db_pool, close_db_pool
+from clients.redis import init_redis_pool, close_redis_pool
+from contextlib import asynccontextmanager
 
 
 @pytest.fixture(scope="session")
@@ -26,7 +28,9 @@ def event_loop():
 @pytest.fixture(scope="session", autouse=True)
 async def init_pool(event_loop):
     await init_db_pool()
+    await init_redis_pool()
     yield
+    await close_redis_pool()
     await close_db_pool()
 
 
@@ -38,11 +42,10 @@ async def init_app_state(init_pool):
     from clients.kafka import kafka_client
     model = load_or_train_model(MODEL_PATH)
     main_module._app_state = main_module.AppState(prediction_service=PredictionService(model=model))
-    # Kafka будет мокаться в тестах, но можно инициализировать для полноты
     try:
         await kafka_client.start()
     except:
-        pass  # Игнорируем ошибки подключения к Kafka в тестах
+        pass
     yield
     try:
         await kafka_client.stop()
@@ -55,7 +58,8 @@ async def init_app_state(init_pool):
 async def setup_database(init_pool):
     """Очищает таблицы перед тестами"""
     conn = await asyncpg.connect(DATABASE_URL)
-    
+    await conn.execute("ALTER TABLE ads ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT FALSE")
+
     await conn.execute("TRUNCATE TABLE moderation_results CASCADE")
     await conn.execute("TRUNCATE TABLE ads CASCADE")
     await conn.execute("TRUNCATE TABLE users CASCADE")
@@ -67,9 +71,26 @@ async def setup_database(init_pool):
     yield
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def app_client() -> Generator[AsyncClient, None, None]:
-    transport = ASGITransport(app=app)
+    # Создаем тестовое приложение без lifespan (Redis/DB управляются conftest)
+    from fastapi import FastAPI
+    from routers.predict import router as predict_router
+    from routers.moderation import router as moderation_router
+    from errors import PredictionError
+    from fastapi.responses import JSONResponse
+    from fastapi import Request
+    
+    test_app = FastAPI()
+    test_app.include_router(predict_router)
+    test_app.include_router(moderation_router)
+    
+    def prediction_error_handler(request: Request, exc: PredictionError) -> JSONResponse:
+        return JSONResponse(status_code=500, content={'detail': str(exc)})
+    
+    test_app.add_exception_handler(PredictionError, prediction_error_handler)
+    
+    transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 

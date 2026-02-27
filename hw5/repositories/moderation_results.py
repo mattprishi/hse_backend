@@ -49,3 +49,8 @@ class ModerationResultRepository:
             await conn.execute(
                 query, status, is_violation, probability, error_message, item_id
             )
+
+    async def delete_by_item_id(self, item_id: int) -> None:
+        query = "DELETE FROM moderation_results WHERE item_id = $1"
+        async with get_pg_connection() as conn:
+            await conn.execute(query, item_id)

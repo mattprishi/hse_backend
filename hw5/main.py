@@ -7,6 +7,7 @@ from routers.predict import router as predict_router
 from routers.moderation import router as moderation_router
 from errors import PredictionError
 from clients.postgres import init_db_pool, close_db_pool
+from clients.redis import init_redis_pool, close_redis_pool
 from clients.kafka import kafka_client
 from services.predict import PredictionService
 from config import MODEL_PATH
@@ -47,6 +48,9 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database pool...")
     await init_db_pool()
 
+    logger.info("Initializing Redis pool...")
+    await init_redis_pool()
+
     logger.info("Initializing Kafka...")
     await kafka_client.start()
 
@@ -60,6 +64,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Closing Kafka...")
     await kafka_client.stop()
+
+    logger.info("Closing Redis pool...")
+    await close_redis_pool()
 
     logger.info("Closing database pool...")
     await close_db_pool()

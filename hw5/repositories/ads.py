@@ -41,9 +41,16 @@ class AdRepository:
                 u.is_verified as is_verified_seller
             FROM ads a
             JOIN users u ON a.user_id = u.id
-            WHERE a.id = $1
+            WHERE a.id = $1 AND a.is_closed = FALSE
         """
         
         async with get_pg_connection() as conn:
             row = await conn.fetchrow(query, ad_id)
             return dict(row) if row else None
+
+    async def close(self, ad_id: int) -> bool:
+        query = "UPDATE ads SET is_closed = TRUE WHERE id = $1 AND is_closed = FALSE RETURNING id"
+        
+        async with get_pg_connection() as conn:
+            row = await conn.fetchrow(query, ad_id)
+            return row is not None

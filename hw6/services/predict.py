@@ -1,9 +1,15 @@
 from dataclasses import dataclass
+from time import perf_counter
 from models.predict import PredictOutDto
 from errors import PredictionError, AdNotFoundError
 from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from storages.cache import RedisCacheStorage
+from metrics import (
+    PREDICTION_DURATION,
+    PREDICTION_ERRORS_TOTAL,
+    observe_prediction_metrics,
+)
 import numpy as np
 import logging
 
@@ -19,6 +25,7 @@ class PredictionService:
 
     async def predict_by_item_id(self, item_id: int) -> PredictOutDto:
         if self.model is None:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="model_unavailable").inc()
             raise PredictionError("Model not loaded")
         
         # Check cache first
@@ -50,10 +57,13 @@ class PredictionService:
         ]])
         
         try:
+            started_at = perf_counter()
             prediction = int(self.model.predict(features)[0])
             probability = float(self.model.predict_proba(features)[0][1])
+            PREDICTION_DURATION.observe(perf_counter() - started_at)
             
             is_violation = bool(prediction)
+            observe_prediction_metrics(is_violation, probability)
             
             logger.info(
                 f"Result for item_id={item_id}: "
@@ -67,6 +77,7 @@ class PredictionService:
             
             return result
         except Exception as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="prediction_error").inc()
             logger.exception("Prediction error")
             raise PredictionError(f"Prediction failed: {str(e)}")
 

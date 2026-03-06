@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from routers.predict import router as predict_router
 from routers.moderation import router as moderation_router
 from errors import PredictionError
@@ -87,6 +88,7 @@ def prediction_error_handler(request: Request, exc: PredictionError) -> JSONResp
 app.add_exception_handler(PredictionError, prediction_error_handler)
 app.include_router(predict_router)
 app.include_router(moderation_router)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 if __name__ == "__main__":

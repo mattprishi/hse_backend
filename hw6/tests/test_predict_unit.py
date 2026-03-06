@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from services.predict import PredictionService
-from errors import AdNotFoundError
+from errors import AdNotFoundError, PredictionError
 
 
 @pytest.mark.asyncio
@@ -36,7 +36,9 @@ async def test_predict_cache_miss():
     mock_model.predict_proba.return_value = [[0.1, 0.9]]
     
     with patch('services.predict.RedisCacheStorage') as MockCache, \
-         patch('services.predict.AdRepository') as MockRepo:
+         patch('services.predict.AdRepository') as MockRepo, \
+         patch('services.predict.PREDICTION_DURATION') as mock_duration, \
+         patch('services.predict.observe_prediction_metrics') as mock_prediction_metrics:
         
         mock_cache = MockCache.return_value
         mock_cache.get_prediction = AsyncMock(return_value=None)
@@ -59,6 +61,19 @@ async def test_predict_cache_miss():
         mock_cache.get_prediction.assert_called_once_with(123)
         mock_repo.get_with_user.assert_called_once_with(123)
         mock_cache.set_prediction.assert_called_once()
+        mock_duration.observe.assert_called_once()
+        mock_prediction_metrics.assert_called_once_with(True, 0.9)
+
+
+@pytest.mark.asyncio
+async def test_predict_model_unavailable_updates_metric():
+    service = PredictionService(model=None)
+
+    with patch("services.predict.PREDICTION_ERRORS_TOTAL") as mock_errors:
+        with pytest.raises(PredictionError, match="Model not loaded"):
+            await service.predict_by_item_id(123)
+
+    mock_errors.labels.assert_called_once_with(error_type="model_unavailable")
 
 
 @pytest.mark.asyncio

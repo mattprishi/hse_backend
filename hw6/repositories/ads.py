@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Mapping, Any, Optional
 from clients.postgres import get_pg_connection
+from metrics import DB_QUERY_DURATION
 from models.entities import Ad
 
 
@@ -22,16 +23,18 @@ class AdRepository:
         """
         
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(
-                query, user_id, title, description, category, images_qty, price
-            )
+            with DB_QUERY_DURATION.labels(query_type="insert").time():
+                row = await conn.fetchrow(
+                    query, user_id, title, description, category, images_qty, price
+                )
             return Ad(**dict(row))
     
     async def get_by_id(self, ad_id: int) -> Optional[Ad]:
         query = "SELECT * FROM ads WHERE id = $1"
         
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, ad_id)
+            with DB_QUERY_DURATION.labels(query_type="select").time():
+                row = await conn.fetchrow(query, ad_id)
             return Ad(**dict(row)) if row else None
     
     async def get_with_user(self, ad_id: int) -> Optional[Mapping[str, Any]]:
@@ -45,12 +48,14 @@ class AdRepository:
         """
         
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, ad_id)
+            with DB_QUERY_DURATION.labels(query_type="select").time():
+                row = await conn.fetchrow(query, ad_id)
             return dict(row) if row else None
 
     async def close(self, ad_id: int) -> bool:
         query = "UPDATE ads SET is_closed = TRUE WHERE id = $1 AND is_closed = FALSE RETURNING id"
         
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, ad_id)
+            with DB_QUERY_DURATION.labels(query_type="update").time():
+                row = await conn.fetchrow(query, ad_id)
             return row is not None

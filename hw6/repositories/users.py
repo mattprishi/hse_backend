@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Mapping, Any, Optional
 from clients.postgres import get_pg_connection
+from metrics import DB_QUERY_DURATION
 from models.entities import User
 
 
@@ -14,12 +15,14 @@ class UserRepository:
         """
         
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, name, email, is_verified)
+            with DB_QUERY_DURATION.labels(query_type="insert").time():
+                row = await conn.fetchrow(query, name, email, is_verified)
             return User(**dict(row))
     
     async def get_by_id(self, user_id: int) -> Optional[User]:
         query = "SELECT * FROM users WHERE id = $1"
         
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, user_id)
+            with DB_QUERY_DURATION.labels(query_type="select").time():
+                row = await conn.fetchrow(query, user_id)
             return User(**dict(row)) if row else None

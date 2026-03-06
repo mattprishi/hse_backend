@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime
 from clients.postgres import get_pg_connection
+from metrics import DB_QUERY_DURATION
 from models.moderation import ModerationResult
 
 
@@ -14,13 +15,15 @@ class ModerationResultRepository:
             RETURNING *
         """
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, item_id)
+            with DB_QUERY_DURATION.labels(query_type="insert").time():
+                row = await conn.fetchrow(query, item_id)
             return ModerationResult(**dict(row))
 
     async def get_by_id(self, task_id: int) -> Optional[ModerationResult]:
         query = "SELECT * FROM moderation_results WHERE id = $1"
         async with get_pg_connection() as conn:
-            row = await conn.fetchrow(query, task_id)
+            with DB_QUERY_DURATION.labels(query_type="select").time():
+                row = await conn.fetchrow(query, task_id)
             return ModerationResult(**dict(row)) if row else None
 
     async def update_result(
@@ -46,11 +49,13 @@ class ModerationResultRepository:
             )
         """
         async with get_pg_connection() as conn:
-            await conn.execute(
-                query, status, is_violation, probability, error_message, item_id
-            )
+            with DB_QUERY_DURATION.labels(query_type="update").time():
+                await conn.execute(
+                    query, status, is_violation, probability, error_message, item_id
+                )
 
     async def delete_by_item_id(self, item_id: int) -> None:
         query = "DELETE FROM moderation_results WHERE item_id = $1"
         async with get_pg_connection() as conn:
-            await conn.execute(query, item_id)
+            with DB_QUERY_DURATION.labels(query_type="delete").time():
+                await conn.execute(query, item_id)

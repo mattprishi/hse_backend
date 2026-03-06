@@ -6,6 +6,15 @@ from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
+async def test_metrics_endpoint(app_client: AsyncClient):
+    response = await app_client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text
+    assert "predictions_total" in response.text
+
+
+@pytest.mark.asyncio
 async def test_simple_predict_positive(
     app_client: AsyncClient,
     ad_repository: AdRepository,

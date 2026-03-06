@@ -2,12 +2,14 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from time import perf_counter
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from config import KAFKA_BOOTSTRAP_SERVERS, DATABASE_URL
 from clients.postgres import init_db_pool, get_pg_connection
 from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
+from metrics import PREDICTION_DURATION, observe_prediction_metrics
 import sys
 import os
 
@@ -30,9 +32,13 @@ async def predict_ml(ad_data: dict, model):
         len(ad_data['description']) / 1000.0,
         ad_data['category'] / 100.0,
     ]])
+    started_at = perf_counter()
     prediction = int(model.predict(features)[0])
     probability = float(model.predict_proba(features)[0][1])
-    return {"is_violation": bool(prediction), "probability": probability}
+    PREDICTION_DURATION.observe(perf_counter() - started_at)
+    is_violation = bool(prediction)
+    observe_prediction_metrics(is_violation, probability)
+    return {"is_violation": is_violation, "probability": probability}
 
 
 async def process_message(msg_value: bytes, model):

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from time import perf_counter
+import sentry_sdk
 from models.predict import PredictOutDto
 from errors import PredictionError, AdNotFoundError
 from repositories.ads import AdRepository
@@ -26,7 +27,9 @@ class PredictionService:
     async def predict_by_item_id(self, item_id: int) -> PredictOutDto:
         if self.model is None:
             PREDICTION_ERRORS_TOTAL.labels(error_type="model_unavailable").inc()
-            raise PredictionError("Model not loaded")
+            exc = PredictionError("Model not loaded")
+            sentry_sdk.capture_exception(exc)
+            raise exc
         
         # Check cache first
         cached = await self.cache_storage.get_prediction(item_id)
@@ -79,6 +82,7 @@ class PredictionService:
         except Exception as e:
             PREDICTION_ERRORS_TOTAL.labels(error_type="prediction_error").inc()
             logger.exception("Prediction error")
+            sentry_sdk.capture_exception(e)
             raise PredictionError(f"Prediction failed: {str(e)}")
 
     async def close_ad(self, item_id: int) -> bool:

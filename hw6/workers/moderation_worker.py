@@ -4,8 +4,9 @@ import logging
 from datetime import datetime
 from time import perf_counter
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from config import KAFKA_BOOTSTRAP_SERVERS, DATABASE_URL
-from clients.postgres import init_db_pool, get_pg_connection
+import sentry_sdk
+from config import KAFKA_BOOTSTRAP_SERVERS
+from clients.postgres import init_db_pool
 from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
@@ -50,11 +51,6 @@ async def process_message(msg_value: bytes, model):
 
     ad_repo = AdRepository()
     moderation_repo = ModerationResultRepository()
-
-    # Создаём запись если её нет
-    existing_task = await moderation_repo.get_by_id(item_id)
-    if not existing_task:
-        await moderation_repo.create(item_id)
 
     ad_data = await ad_repo.get_with_user(item_id)
     if not ad_data:
@@ -137,6 +133,7 @@ async def consume():
 
             except Exception as e:
                 logger.error(f"Fatal error processing message: {e}")
+                sentry_sdk.capture_exception(e)
                 await send_to_dlq(producer, msg.value, str(e), MAX_RETRIES)
                 if item_id:
                     await update_db_status_failed(item_id, str(e))

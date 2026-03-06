@@ -24,7 +24,7 @@ async def test_async_predict_endpoint(app_client: AsyncClient, test_user):
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "pending"
-        assert "task_id" in data
+        assert data["task_id"] > 0
         mock_send.assert_called_once_with(ad.id)
 
 

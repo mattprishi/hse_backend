@@ -26,6 +26,19 @@ class ModerationResultRepository:
                 row = await conn.fetchrow(query, task_id)
             return ModerationResult(**dict(row)) if row else None
 
+    async def get_latest_by_item_id(self, item_id: int) -> Optional[ModerationResult]:
+        query = """
+            SELECT *
+            FROM moderation_results
+            WHERE item_id = $1
+            ORDER BY id DESC
+            LIMIT 1
+        """
+        async with get_pg_connection() as conn:
+            with DB_QUERY_DURATION.labels(query_type="select").time():
+                row = await conn.fetchrow(query, item_id)
+            return ModerationResult(**dict(row)) if row else None
+
     async def update_result(
         self,
         item_id: int,

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+import sentry_sdk
 from models.predict import SimplePredictInDto, PredictOutDto
 from services.predict import PredictionService
 from errors import AdNotFoundError
@@ -20,6 +21,7 @@ async def simple_predict(
     try:
         return await service.predict_by_item_id(dto.item_id)
     except AdNotFoundError as e:
+        sentry_sdk.capture_exception(e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 

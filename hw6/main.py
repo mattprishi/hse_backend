@@ -4,6 +4,8 @@ from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from routers.predict import router as predict_router
 from routers.moderation import router as moderation_router
 from errors import PredictionError
@@ -11,7 +13,7 @@ from clients.postgres import init_db_pool, close_db_pool
 from clients.redis import init_redis_pool, close_redis_pool
 from clients.kafka import kafka_client
 from services.predict import PredictionService
-from config import MODEL_PATH
+from config import MODEL_PATH, SENTRY_DSN, SENTRY_ENVIRONMENT
 import uvicorn
 import logging
 import sys
@@ -26,6 +28,14 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=1.0,
+        environment=SENTRY_ENVIRONMENT,
+        integrations=[FastApiIntegration()],
+    )
 
 
 @dataclass
@@ -82,6 +92,7 @@ async def root():
 
 
 def prediction_error_handler(request: Request, exc: PredictionError) -> JSONResponse:
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(status_code=500, content={'detail': str(exc)})
 
 

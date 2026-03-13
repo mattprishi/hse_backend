@@ -1,10 +1,11 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from repositories.ads import AdRepository
 from models.entities import User
 from unittest.mock import AsyncMock, patch
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_metrics_endpoint(app_client: AsyncClient):
     response = await app_client.get("/metrics")
@@ -14,9 +15,10 @@ async def test_metrics_endpoint(app_client: AsyncClient):
     assert "predictions_total" in response.text
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_simple_predict_positive(
-    app_client: AsyncClient,
+    app_client_logged_in: AsyncClient,
     ad_repository: AdRepository,
     test_user: User
 ):
@@ -30,7 +32,7 @@ async def test_simple_predict_positive(
         price=1000.0
     )
     
-    response = await app_client.post("/simple_predict", json={"item_id": ad.id})
+    response = await app_client_logged_in.post("/simple_predict", json={"item_id": ad.id})
     
     assert response.status_code == 200
     data = response.json()
@@ -41,9 +43,10 @@ async def test_simple_predict_positive(
     assert data["is_violation"] is True
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_simple_predict_negative(
-    app_client: AsyncClient,
+    app_client_logged_in: AsyncClient,
     ad_repository: AdRepository,
     verified_user: User
 ):
@@ -57,7 +60,7 @@ async def test_simple_predict_negative(
         price=5000.0
     )
     
-    response = await app_client.post("/simple_predict", json={"item_id": ad.id})
+    response = await app_client_logged_in.post("/simple_predict", json={"item_id": ad.id})
     
     assert response.status_code == 200
     data = response.json()
@@ -68,23 +71,37 @@ async def test_simple_predict_negative(
     assert data["is_violation"] is False
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_simple_predict_not_found(app_client: AsyncClient):
+async def test_simple_predict_not_found(app_client_logged_in: AsyncClient):
     """Проверяет ошибку 404 для несуществующего объявления"""
-    response = await app_client.post("/simple_predict", json={"item_id": 99999})
+    response = await app_client_logged_in.post("/simple_predict", json={"item_id": 99999})
     assert response.status_code == 404
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_simple_predict_invalid_item_id(app_client: AsyncClient):
+async def test_simple_predict_unauthorized(init_app_state, setup_database):
+    """Без токена предсказание возвращает 401"""
+    from main import app
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/simple_predict", json={"item_id": 1})
+    assert response.status_code == 401
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_simple_predict_invalid_item_id(app_client_logged_in: AsyncClient):
     """Проверяет валидацию item_id"""
-    response = await app_client.post("/simple_predict", json={"item_id": 0})
+    response = await app_client_logged_in.post("/simple_predict", json={"item_id": 0})
     assert response.status_code == 422
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_cache_hit(
-    app_client: AsyncClient,
+    app_client_logged_in: AsyncClient,
     ad_repository: AdRepository,
     verified_user: User
 ):
@@ -98,19 +115,20 @@ async def test_cache_hit(
         price=2000.0
     )
     
-    response1 = await app_client.post("/simple_predict", json={"item_id": ad.id})
+    response1 = await app_client_logged_in.post("/simple_predict", json={"item_id": ad.id})
     assert response1.status_code == 200
     
     with patch('services.predict.AdRepository.get_with_user') as mock_db:
-        response2 = await app_client.post("/simple_predict", json={"item_id": ad.id})
+        response2 = await app_client_logged_in.post("/simple_predict", json={"item_id": ad.id})
         assert response2.status_code == 200
         assert response1.json() == response2.json()
         mock_db.assert_not_called()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_close_ad(
-    app_client: AsyncClient,
+    app_client_logged_in: AsyncClient,
     ad_repository: AdRepository,
     test_user: User
 ):
@@ -124,16 +142,17 @@ async def test_close_ad(
         price=1500.0
     )
     
-    response = await app_client.post("/close", json={"item_id": ad.id})
+    response = await app_client_logged_in.post("/close", json={"item_id": ad.id})
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     
-    predict_response = await app_client.post("/simple_predict", json={"item_id": ad.id})
+    predict_response = await app_client_logged_in.post("/simple_predict", json={"item_id": ad.id})
     assert predict_response.status_code == 404
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_close_nonexistent_ad(app_client: AsyncClient):
+async def test_close_nonexistent_ad(app_client_logged_in: AsyncClient):
     """Проверяет закрытие несуществующего объявления"""
-    response = await app_client.post("/close", json={"item_id": 99999})
+    response = await app_client_logged_in.post("/close", json={"item_id": 99999})
     assert response.status_code == 404

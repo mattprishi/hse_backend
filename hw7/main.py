@@ -8,6 +8,7 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from routers.predict import router as predict_router
 from routers.moderation import router as moderation_router
+from routers.auth import router as auth_router
 from errors import PredictionError
 from clients.postgres import init_db_pool, close_db_pool
 from clients.redis import init_redis_pool, close_redis_pool
@@ -97,6 +98,7 @@ def prediction_error_handler(request: Request, exc: PredictionError) -> JSONResp
 
 
 app.add_exception_handler(PredictionError, prediction_error_handler)
+app.include_router(auth_router)
 app.include_router(predict_router)
 app.include_router(moderation_router)
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)

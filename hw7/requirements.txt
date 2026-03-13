@@ -13,3 +13,4 @@ redis==5.0.1
 prometheus-client
 prometheus-fastapi-instrumentator
 sentry-sdk[fastapi]
+PyJWT>=2.8.0

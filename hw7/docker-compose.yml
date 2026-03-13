@@ -1,14 +1,21 @@
 services:
   postgres:
-    image: postgres:14
+    image: postgres:16
     environment:
-      POSTGRES_USER: user
-      POSTGRES_DB: moderation
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: hw
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
   redpanda:
     image: redpandadata/redpanda:latest
@@ -27,45 +34,6 @@ services:
       - "9092:9092"
       - "29092:29092"
 
-  console:
-    image: redpandadata/console:latest
-    environment:
-      KAFKA_BROKERS: redpanda:29092
-    ports:
-      - "8080:8080"
-    depends_on:
-      - redpanda
-
-  redis:
-    image: redis:latest
-    restart: always
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana:latest
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-
 volumes:
-  postgres_data:
+  pgdata:
   redis_data:
-  grafana_data:

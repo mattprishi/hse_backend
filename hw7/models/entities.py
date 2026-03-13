@@ -20,3 +20,10 @@ class Ad(BaseModel):
     price: float = Field(..., ge=0)
     created_at: datetime
     is_closed: bool = False
+
+
+class Account(BaseModel):
+    id: int = Field(..., gt=0)
+    login: str
+    password: str = ""
+    is_blocked: bool = False

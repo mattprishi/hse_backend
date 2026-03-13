@@ -14,3 +14,7 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "development")
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = 30

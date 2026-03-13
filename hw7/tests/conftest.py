@@ -13,9 +13,9 @@ import main as main_module
 from main import app, get_app_state
 from repositories.users import UserRepository
 from repositories.ads import AdRepository
+from repositories.accounts import AccountRepository
 from clients.postgres import init_db_pool, close_db_pool
 from clients.redis import init_redis_pool, close_redis_pool
-from contextlib import asynccontextmanager
 
 
 @pytest.fixture(scope="session")
@@ -59,14 +59,25 @@ async def setup_database(init_pool):
     """Очищает таблицы перед тестами"""
     conn = await asyncpg.connect(DATABASE_URL)
     await conn.execute("ALTER TABLE ads ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT FALSE")
-
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS account (
+            id SERIAL PRIMARY KEY,
+            login TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            is_blocked BOOLEAN DEFAULT FALSE
+        )
+    """)
     await conn.execute("TRUNCATE TABLE moderation_results CASCADE")
     await conn.execute("TRUNCATE TABLE ads CASCADE")
     await conn.execute("TRUNCATE TABLE users CASCADE")
+    try:
+        await conn.execute("TRUNCATE TABLE account CASCADE")
+        await conn.execute("ALTER SEQUENCE account_id_seq RESTART WITH 1")
+    except Exception:
+        pass
     await conn.execute("ALTER SEQUENCE users_id_seq RESTART WITH 1")
     await conn.execute("ALTER SEQUENCE ads_id_seq RESTART WITH 1")
     await conn.execute("ALTER SEQUENCE moderation_results_id_seq RESTART WITH 1")
-    
     await conn.close()
     yield
 
@@ -86,6 +97,26 @@ def user_repository(init_pool) -> UserRepository:
 @pytest.fixture
 def ad_repository(init_pool) -> AdRepository:
     return AdRepository()
+
+
+@pytest.fixture
+def account_repository(init_pool) -> AccountRepository:
+    return AccountRepository()
+
+
+@pytest.fixture
+async def test_account(account_repository: AccountRepository, setup_database):
+    login = f"testuser_{os.urandom(4).hex()}"
+    acc = await account_repository.create(login, "testpass")
+    return {"login": login, "password": "testpass", "id": acc.id}
+
+
+@pytest.fixture
+async def app_client_logged_in(init_app_state, setup_database, test_account):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/login", json={"login": test_account["login"], "password": test_account["password"]})
+        yield client
 
 
 @pytest.fixture

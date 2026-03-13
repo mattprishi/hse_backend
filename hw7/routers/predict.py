@@ -18,8 +18,8 @@ def get_prediction_service() -> PredictionService:
 @router.post('/simple_predict', status_code=status.HTTP_200_OK, response_model=PredictOutDto)
 async def simple_predict(
     dto: SimplePredictInDto,
-    service: PredictionService = Depends(get_prediction_service),
     current_user: Account = Depends(get_current_user),
+    service: PredictionService = Depends(get_prediction_service),
 ) -> PredictOutDto:
     try:
         return await service.predict_by_item_id(dto.item_id)
@@ -35,8 +35,8 @@ class CloseAdInDto(BaseModel):
 @router.post('/close', status_code=status.HTTP_200_OK)
 async def close_ad(
     dto: CloseAdInDto,
-    service: PredictionService = Depends(get_prediction_service),
     current_user: Account = Depends(get_current_user),
+    service: PredictionService = Depends(get_prediction_service),
 ):
     closed = await service.close_ad(dto.item_id)
     if not closed:

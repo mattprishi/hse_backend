@@ -1,8 +1,9 @@
 import os
 
+# Дефолт совпадает с hw8/docker-compose.yml (postgres:5435 -> БД hw)
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://user@localhost:5433/moderation"
+    "postgresql://postgres:postgres@127.0.0.1:5435/hw",
 )
 
 MODEL_PATH = os.getenv("MODEL_PATH", "model.pkl")
@@ -18,3 +19,6 @@ SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "development")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 30
+
+WORKER_MAX_RETRIES = int(os.getenv("WORKER_MAX_RETRIES", "3"))
+WORKER_RETRY_BASE_DELAY_SEC = float(os.getenv("WORKER_RETRY_BASE_DELAY_SEC", "1.0"))

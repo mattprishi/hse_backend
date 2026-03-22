@@ -3,11 +3,27 @@ from fastapi import Cookie, Depends, HTTPException, Request, status
 from models.entities import Account
 from services.auth import AuthService
 from services.predict import PredictionService
+from services.moderation import ModerationService
 from repositories.accounts import AccountRepository
+from repositories.ads import AdRepository
+from repositories.moderation_results import ModerationResultRepository
+from clients.kafka import KafkaClient, kafka_client
 
 
 def get_prediction_service(request: Request) -> PredictionService:
     return request.app.state.prediction_service
+
+
+def get_kafka_client() -> KafkaClient:
+    return kafka_client
+
+
+def get_moderation_service(kafka: KafkaClient = Depends(get_kafka_client)) -> ModerationService:
+    return ModerationService(
+        ad_repository=AdRepository(),
+        moderation_result_repository=ModerationResultRepository(),
+        kafka=kafka,
+    )
 
 
 def get_auth_service() -> AuthService:

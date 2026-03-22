@@ -5,20 +5,22 @@ from datetime import datetime
 from time import perf_counter
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import sentry_sdk
-from config import KAFKA_BOOTSTRAP_SERVERS
+from config import (
+    KAFKA_BOOTSTRAP_SERVERS,
+    MODEL_PATH,
+    WORKER_MAX_RETRIES,
+    WORKER_RETRY_BASE_DELAY_SEC,
+)
 from clients.postgres import init_db_pool
 from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
 from metrics import PREDICTION_DURATION, observe_prediction_metrics
-from config import MODEL_PATH
 from ml.model import load_or_train_model
+from workers.retry_utils import exponential_backoff_seconds
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-MAX_RETRIES = 3
-RETRY_DELAY = 2
 
 
 async def predict_ml(ad_data: dict, model):
@@ -106,31 +108,41 @@ async def consume():
             item_id = None
 
             try:
-                payload = json.loads(msg.value)
-                item_id = payload.get("item_id")
-            except:
+                raw = msg.value
+                if raw is not None:
+                    payload = json.loads(raw.decode())
+                    item_id = payload.get("item_id")
+            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
                 pass
 
             try:
-                for attempt in range(1, MAX_RETRIES + 2):
+                for attempt in range(WORKER_MAX_RETRIES + 1):
                     try:
                         await process_message(msg.value, model)
                         await consumer.commit()
                         break
                     except Exception as e:
-                        if attempt <= MAX_RETRIES:
-                            logger.warning(
-                                f"Attempt {attempt}/{MAX_RETRIES} failed for item_id={item_id}: {e}. "
-                                f"Retrying in {RETRY_DELAY}s..."
+                        if attempt < WORKER_MAX_RETRIES:
+                            delay = exponential_backoff_seconds(
+                                WORKER_RETRY_BASE_DELAY_SEC,
+                                attempt,
                             )
-                            await asyncio.sleep(RETRY_DELAY)
+                            logger.warning(
+                                "Attempt %s/%s failed for item_id=%s: %s. Retrying in %.2fs...",
+                                attempt + 1,
+                                WORKER_MAX_RETRIES + 1,
+                                item_id,
+                                e,
+                                delay,
+                            )
+                            await asyncio.sleep(delay)
                         else:
                             raise e
 
             except Exception as e:
                 logger.error(f"Fatal error processing message: {e}")
                 sentry_sdk.capture_exception(e)
-                await send_to_dlq(producer, msg.value, str(e), MAX_RETRIES)
+                await send_to_dlq(producer, msg.value, str(e), WORKER_MAX_RETRIES)
                 if item_id:
                     await update_db_status_failed(item_id, str(e))
                 await consumer.commit()

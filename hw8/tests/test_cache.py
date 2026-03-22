@@ -4,7 +4,7 @@ from storages.cache import RedisCacheStorage
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_redis_cache_storage_set_and_get():
+async def test_redis_cache_storage_set_and_get(init_pool):
     """Интеграционный тест: проверка записи и чтения из Redis"""
     storage = RedisCacheStorage()
     item_id = 999
@@ -20,7 +20,7 @@ async def test_redis_cache_storage_set_and_get():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_redis_cache_storage_get_nonexistent():
+async def test_redis_cache_storage_get_nonexistent(init_pool):
     """Интеграционный тест: проверка получения несуществующего ключа"""
     storage = RedisCacheStorage()
     result = await storage.get_prediction(88888)
@@ -30,7 +30,7 @@ async def test_redis_cache_storage_get_nonexistent():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_redis_cache_storage_delete():
+async def test_redis_cache_storage_delete(init_pool):
     """Интеграционный тест: проверка удаления из Redis"""
     storage = RedisCacheStorage()
     item_id = 777

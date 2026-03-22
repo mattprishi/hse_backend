@@ -1,4 +1,5 @@
 from typing import Generator
+import logging
 import pytest
 import asyncio
 from httpx import AsyncClient, ASGITransport
@@ -7,6 +8,9 @@ import asyncpg
 import os
 
 from config import DATABASE_URL, MODEL_PATH
+
+logger = logging.getLogger(__name__)
+from dependencies import get_prediction_service
 from main import app
 from repositories.users import UserRepository
 from repositories.ads import AdRepository
@@ -24,31 +28,40 @@ def event_loop():
 
 @pytest.fixture(scope="session")
 async def init_pool(event_loop):
-    await init_db_pool()
-    await init_redis_pool()
+    try:
+        await init_db_pool()
+        await init_redis_pool()
+    except Exception as e:
+        pytest.skip(f"Нужны PostgreSQL и Redis (hw8/docker-compose up): {e}")
     yield
     await close_redis_pool()
     await close_db_pool()
 
 
 @pytest.fixture(scope="session")
-async def init_app_state(init_pool):
-    """Инициализирует app.state.prediction_service для тестов API (без полного lifespan)."""
+async def init_prediction_overrides(init_pool):
+    """Подменяет get_prediction_service через dependency_overrides (без записи в app.state)."""
     from ml.model import load_or_train_model
     from services.predict import PredictionService
     from clients.kafka import kafka_client
+
     model = load_or_train_model(MODEL_PATH)
-    app.state.prediction_service = PredictionService(model=model)
+    svc = PredictionService(model=model)
+
+    def override_prediction() -> PredictionService:
+        return svc
+
+    app.dependency_overrides[get_prediction_service] = override_prediction
     try:
         await kafka_client.start()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Kafka producer not started in tests: %s", e)
     yield
     try:
         await kafka_client.stop()
-    except Exception:
-        pass
-    del app.state.prediction_service
+    except Exception as e:
+        logger.warning("Kafka producer stop: %s", e)
+    app.dependency_overrides.pop(get_prediction_service, None)
 
 
 @pytest.fixture(scope="session")
@@ -80,7 +93,7 @@ async def setup_database(init_pool):
 
 
 @pytest.fixture(scope="session")
-async def app_client(init_app_state, setup_database) -> Generator[AsyncClient, None, None]:
+async def app_client(init_prediction_overrides, setup_database) -> Generator[AsyncClient, None, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
@@ -109,7 +122,7 @@ async def test_account(account_repository: AccountRepository, setup_database):
 
 
 @pytest.fixture
-async def app_client_logged_in(init_app_state, setup_database, test_account):
+async def app_client_logged_in(init_prediction_overrides, setup_database, test_account):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         await client.post("/login", json={"login": test_account["login"], "password": test_account["password"]})

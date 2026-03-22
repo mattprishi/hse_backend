@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
+from clients.kafka import kafka_client
 from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 
@@ -18,7 +19,7 @@ async def test_async_predict_endpoint(app_client: AsyncClient, test_user):
         price=100.0
     )
 
-    with patch("routers.moderation.kafka_client.send_moderation_request", new_callable=AsyncMock) as mock_send:
+    with patch.object(kafka_client, "send_moderation_request", new_callable=AsyncMock) as mock_send:
         response = await app_client.post("/async_predict", params={"item_id": ad.id})
         
         assert response.status_code == 200

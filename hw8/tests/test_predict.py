@@ -81,7 +81,7 @@ async def test_simple_predict_not_found(app_client_logged_in: AsyncClient):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_simple_predict_unauthorized(init_app_state, setup_database):
+async def test_simple_predict_unauthorized(init_prediction_overrides, setup_database):
     """Без токена предсказание возвращает 401"""
     from main import app
     transport = ASGITransport(app=app)
@@ -91,10 +91,15 @@ async def test_simple_predict_unauthorized(init_app_state, setup_database):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("bad_item_id", [0, -1, -999])
 @pytest.mark.asyncio
-async def test_simple_predict_invalid_item_id(app_client_logged_in: AsyncClient):
-    """Проверяет валидацию item_id"""
-    response = await app_client_logged_in.post("/simple_predict", json={"item_id": 0})
+async def test_simple_predict_invalid_item_id(
+    app_client_logged_in: AsyncClient, bad_item_id: int
+):
+    """Некорректный item_id даёт 422."""
+    response = await app_client_logged_in.post(
+        "/simple_predict", json={"item_id": bad_item_id}
+    )
     assert response.status_code == 422
 
 

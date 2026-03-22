@@ -1,58 +1,39 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 import sentry_sdk
-from repositories.moderation_results import ModerationResultRepository
-from repositories.ads import AdRepository
 from models.moderation import AsyncPredictResponse, ModerationResultResponse
-from clients.kafka import kafka_client
+from services.moderation import ModerationService
+from dependencies import get_moderation_service
+from errors import AdNotFoundError, ModerationEnqueueFailedError, ModerationTaskNotFoundError
+
 router = APIRouter()
 
 
 @router.post("/async_predict", response_model=AsyncPredictResponse)
-async def create_moderation_task(item_id: int):
-    ad_repo = AdRepository()
-    moderation_repo = ModerationResultRepository()
-    ad = await ad_repo.get_by_id(item_id)
-    if not ad:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
-
-    task = await moderation_repo.create(item_id)
-
+async def create_moderation_task(
+    item_id: int,
+    service: ModerationService = Depends(get_moderation_service),
+):
     try:
-        await kafka_client.send_moderation_request(item_id)
-    except Exception as e:
-        await moderation_repo.update_result(item_id, "failed", error_message="Failed to queue moderation task")
-        sentry_sdk.capture_exception(e)
+        return await service.enqueue_moderation(item_id)
+    except AdNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ModerationEnqueueFailedError as e:
+        sentry_sdk.capture_exception(e.__cause__ if e.__cause__ else e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to queue moderation task"
+            detail="Failed to queue moderation task",
         )
-
-    return AsyncPredictResponse(
-        task_id=task.id,
-        status="pending",
-        message="Moderation request accepted"
-    )
 
 
 @router.get("/moderation_result/{task_id}", response_model=ModerationResultResponse)
-async def get_moderation_result(task_id: int):
-    moderation_repo = ModerationResultRepository()
-    task = await moderation_repo.get_by_id(task_id)
-
-    if not task:
+async def get_moderation_result(
+    task_id: int,
+    service: ModerationService = Depends(get_moderation_service),
+):
+    try:
+        return await service.get_moderation_result(task_id)
+    except ModerationTaskNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task with id {task_id} not found"
+            detail=f"Task with id {e.task_id} not found",
         )
-
-    response = ModerationResultResponse(
-        task_id=task.id,
-        status=task.status,
-        is_violation=task.is_violation,
-        probability=task.probability
-    )
-
-    if task.status == "failed":
-        response.error = task.error_message
-
-    return response

@@ -161,3 +161,13 @@ async def test_close_nonexistent_ad(app_client_logged_in: AsyncClient):
     """Проверяет закрытие несуществующего объявления"""
     response = await app_client_logged_in.post("/close", json={"item_id": 99999})
     assert response.status_code == 404
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("bad_item_id", [0, -1])
+@pytest.mark.asyncio
+async def test_close_invalid_item_id(
+    app_client_logged_in: AsyncClient, bad_item_id: int
+):
+    response = await app_client_logged_in.post("/close", json={"item_id": bad_item_id})
+    assert response.status_code == 422

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 import sentry_sdk
 from models.moderation import AsyncPredictResponse, ModerationResultResponse
 from services.moderation import ModerationService
@@ -10,7 +12,7 @@ router = APIRouter()
 
 @router.post("/async_predict", response_model=AsyncPredictResponse)
 async def create_moderation_task(
-    item_id: int,
+    item_id: Annotated[int, Query(ge=1)],
     service: ModerationService = Depends(get_moderation_service),
 ):
     try:
@@ -27,7 +29,7 @@ async def create_moderation_task(
 
 @router.get("/moderation_result/{task_id}", response_model=ModerationResultResponse)
 async def get_moderation_result(
-    task_id: int,
+    task_id: Annotated[int, Path(ge=1)],
     service: ModerationService = Depends(get_moderation_service),
 ):
     try:

@@ -8,3 +8,7 @@ class PredictOutDto(BaseModel):
 
 class SimplePredictInDto(BaseModel):
     item_id: int = Field(ge=1)
+
+
+class CloseAdInDto(BaseModel):
+    item_id: int = Field(ge=1)

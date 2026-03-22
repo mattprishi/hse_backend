@@ -24,6 +24,6 @@ class Ad(BaseModel):
 
 class Account(BaseModel):
     id: int = Field(..., gt=0)
-    login: str
+    login: str = Field(..., min_length=1, max_length=255)
     password: str = ""
     is_blocked: bool = False

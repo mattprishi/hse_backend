@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -16,7 +18,7 @@ from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
 from metrics import PREDICTION_DURATION, observe_prediction_metrics
-from ml.model import load_or_train_model
+from ml.model import load_model
 from workers.retry_utils import exponential_backoff_seconds
 from logging_config import setup_app_logging
 
@@ -83,10 +85,59 @@ async def update_db_status_failed(item_id: int, error_msg: str):
     await moderation_repo.update_result(item_id, "failed", error_message=str(error_msg))
 
 
+def _parse_item_id_from_message(msg_value: bytes | None) -> int | None:
+    if msg_value is None:
+        return None
+    try:
+        payload = json.loads(msg_value.decode())
+        item_id = payload.get("item_id")
+        return int(item_id) if item_id is not None else None
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
+        return None
+
+
+async def process_kafka_message_with_retries(
+    msg,
+    model,
+    consumer: AIOKafkaConsumer,
+) -> None:
+    """Обрабатывает одно сообщение с retry; при успехе делает commit."""
+    item_id = _parse_item_id_from_message(msg.value)
+    for attempt in range(WORKER_MAX_RETRIES + 1):
+        try:
+            await process_message(msg.value, model)
+            await consumer.commit()
+            return
+        except Exception as e:
+            if attempt < WORKER_MAX_RETRIES:
+                delay = exponential_backoff_seconds(
+                    WORKER_RETRY_BASE_DELAY_SEC,
+                    attempt,
+                )
+                logger.warning(
+                    "Attempt %s/%s failed for item_id=%s: %s. Retrying in %.2fs...",
+                    attempt + 1,
+                    WORKER_MAX_RETRIES + 1,
+                    item_id,
+                    e,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
+
+
 async def consume():
     await init_db_pool()
 
-    model = load_or_train_model(MODEL_PATH)
+    try:
+        model = load_model(MODEL_PATH)
+    except FileNotFoundError:
+        logger.error(
+            "Model file not found: %s. Run: python train_model.py",
+            MODEL_PATH,
+        )
+        raise
 
     consumer = AIOKafkaConsumer(
         TOPIC_MODERATION,
@@ -106,40 +157,10 @@ async def consume():
     try:
         async for msg in consumer:
             logger.info(f"Received message: {msg.value}")
-            item_id = None
+            item_id = _parse_item_id_from_message(msg.value)
 
             try:
-                raw = msg.value
-                if raw is not None:
-                    payload = json.loads(raw.decode())
-                    item_id = payload.get("item_id")
-            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
-                pass
-
-            try:
-                for attempt in range(WORKER_MAX_RETRIES + 1):
-                    try:
-                        await process_message(msg.value, model)
-                        await consumer.commit()
-                        break
-                    except Exception as e:
-                        if attempt < WORKER_MAX_RETRIES:
-                            delay = exponential_backoff_seconds(
-                                WORKER_RETRY_BASE_DELAY_SEC,
-                                attempt,
-                            )
-                            logger.warning(
-                                "Attempt %s/%s failed for item_id=%s: %s. Retrying in %.2fs...",
-                                attempt + 1,
-                                WORKER_MAX_RETRIES + 1,
-                                item_id,
-                                e,
-                                delay,
-                            )
-                            await asyncio.sleep(delay)
-                        else:
-                            raise e
-
+                await process_kafka_message_with_retries(msg, model, consumer)
             except Exception as e:
                 logger.error(f"Fatal error processing message: {e}")
                 sentry_sdk.capture_exception(e)

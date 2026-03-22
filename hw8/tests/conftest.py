@@ -66,28 +66,11 @@ async def init_prediction_overrides(init_pool):
 
 @pytest.fixture(scope="session")
 async def setup_database(init_pool):
-    """Очищает таблицы перед тестами"""
+    """Очищает таблицы перед тестами (схема только из migrations/, см. make migrate)."""
     conn = await asyncpg.connect(DATABASE_URL)
-    await conn.execute("ALTER TABLE ads ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT FALSE")
-    await conn.execute("""
-        CREATE TABLE IF NOT EXISTS account (
-            id SERIAL PRIMARY KEY,
-            login TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            is_blocked BOOLEAN DEFAULT FALSE
-        )
-    """)
-    await conn.execute("TRUNCATE TABLE moderation_results CASCADE")
-    await conn.execute("TRUNCATE TABLE ads CASCADE")
-    await conn.execute("TRUNCATE TABLE users CASCADE")
-    try:
-        await conn.execute("TRUNCATE TABLE account CASCADE")
-        await conn.execute("ALTER SEQUENCE account_id_seq RESTART WITH 1")
-    except Exception:
-        pass
-    await conn.execute("ALTER SEQUENCE users_id_seq RESTART WITH 1")
-    await conn.execute("ALTER SEQUENCE ads_id_seq RESTART WITH 1")
-    await conn.execute("ALTER SEQUENCE moderation_results_id_seq RESTART WITH 1")
+    await conn.execute(
+        "TRUNCATE TABLE account, users RESTART IDENTITY CASCADE"
+    )
     await conn.close()
     yield
 

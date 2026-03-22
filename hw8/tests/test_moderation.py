@@ -6,6 +6,7 @@ from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_async_predict_endpoint(app_client: AsyncClient, test_user):
     ad_repo = AdRepository()
@@ -29,12 +30,30 @@ async def test_async_predict_endpoint(app_client: AsyncClient, test_user):
         mock_send.assert_called_once_with(ad.id)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_async_predict_not_found(app_client: AsyncClient):
     response = await app_client.post("/async_predict", params={"item_id": 99999})
     assert response.status_code == 404
 
 
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_item_id", [0, -1])
+async def test_async_predict_invalid_item_id(app_client: AsyncClient, bad_item_id: int):
+    response = await app_client.post("/async_predict", params={"item_id": bad_item_id})
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_task_id", [0, -1])
+async def test_moderation_result_invalid_task_id(app_client: AsyncClient, bad_task_id: int):
+    response = await app_client.get(f"/moderation_result/{bad_task_id}")
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_moderation_result_pending(app_client: AsyncClient, test_user):
     ad_repo = AdRepository()
@@ -61,6 +80,7 @@ async def test_get_moderation_result_pending(app_client: AsyncClient, test_user)
     assert data["probability"] is None
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_moderation_result_not_found(app_client: AsyncClient):
     response = await app_client.get("/moderation_result/99999")

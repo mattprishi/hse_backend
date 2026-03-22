@@ -29,3 +29,12 @@ async def test_login_blocked_user(app_client: AsyncClient, account_repository, s
     await account_repository.block(acc.id)
     r = await app_client.post("/login", json={"login": login, "password": "pass"})
     assert r.status_code == 401
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_login_validation_empty_fields(app_client: AsyncClient):
+    r = await app_client.post("/login", json={"login": "", "password": "x"})
+    assert r.status_code == 422
+    r2 = await app_client.post("/login", json={"login": "user", "password": ""})
+    assert r2.status_code == 422

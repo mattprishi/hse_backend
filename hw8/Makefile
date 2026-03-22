@@ -10,7 +10,7 @@ export REDIS_PORT ?= 6379
 export MODEL_PATH ?= model.pkl
 export LOG_LEVEL ?= INFO
 
-.PHONY: up down migrate run worker test test-unit
+.PHONY: up down migrate train-model run worker test test-unit
 
 # Поднять Postgres, Redis, Redpanda, Console, Prometheus, Grafana
 up:
@@ -23,18 +23,22 @@ down:
 migrate:
 	set -e; for f in migrations/V*.sql; do psql "$$DATABASE_URL" -f "$$f"; done
 
-# API на :8003 (нужны: up + migrate)
+# Обучить и сохранить model.pkl (до make run / make worker)
+train-model:
+	python3 train_model.py
+
+# API на :8003 (нужны: up + migrate + train-model)
 run:
-	python main.py
+	python3 main.py
 
 # Воркер модерации (Kafka consumer)
 worker:
-	python -m workers.moderation_worker
+	python3 -m workers.moderation_worker
 
 # Юнит-тесты без БД/Redis
 test-unit:
-	pytest -m "not integration" -v
+	python3 -m pytest -m "not integration" -v
 
 # Интеграционные тесты (нужны: make up && make migrate)
 test:
-	pytest -v
+	python3 -m pytest -v

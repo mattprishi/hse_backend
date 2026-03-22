@@ -25,18 +25,24 @@ def save_model(model, path: str) -> None:
 
 
 def load_model(path: str):
+    """Загрузка артефакта. API и воркер вызывают только это — без обучения при старте."""
     with open(path, "rb") as f:
         model = pickle.load(f)
     logger.info("Model loaded from %s", path)
     return model
 
 
+def train_and_save(path: str):
+    """Обучение и сохранение в файл (скрипт train_model.py, тесты)."""
+    model = train_model()
+    save_model(model, path)
+    return model
+
+
 def load_or_train_model(path: str):
-    """Для локальной разработки: файл есть — загрузить, нет — обучить и сохранить."""
+    """Только для тестов/локальной отладки: нет файла — обучить и сохранить."""
     try:
         return load_model(path)
     except FileNotFoundError:
-        logger.info("Model not found at %s, training new model", path)
-        model = train_model()
-        save_model(model, path)
-        return model
+        logger.info("Model not found at %s, training new model for tests", path)
+        return train_and_save(path)

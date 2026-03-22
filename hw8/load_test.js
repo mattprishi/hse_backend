@@ -8,17 +8,30 @@ export const options = {
 
 const baseUrl = __ENV.BASE_URL || "http://localhost:8003";
 const itemId = __ENV.ITEM_ID || "1";
+const login = __ENV.LOGIN || "loadtest";
+const password = __ENV.PASSWORD || "loadtest";
+
+let sessionReady = false;
+
+function ensureSession() {
+  if (sessionReady) return;
+  const res = http.post(
+    `${baseUrl}/login`,
+    JSON.stringify({ login, password }),
+    { headers: { "Content-Type": "application/json" } }
+  );
+  if (res.status !== 200) {
+    throw new Error(`login failed: ${res.status} ${res.body}`);
+  }
+  sessionReady = true;
+}
 
 export default function () {
+  ensureSession();
+
   http.post(
     `${baseUrl}/simple_predict`,
     JSON.stringify({ item_id: Number(itemId) }),
-    { headers: { "Content-Type": "application/json" } }
-  );
-
-  http.post(
-    `${baseUrl}/simple_predict`,
-    JSON.stringify({ item_id: 0 }),
     { headers: { "Content-Type": "application/json" } }
   );
 

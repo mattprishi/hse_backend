@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 import sentry_sdk
-from models.predict import SimplePredictInDto, PredictOutDto
+from models.predict import SimplePredictInDto, PredictOutDto, CloseAdInDto
 from models.entities import Account
 from services.predict import PredictionService
 from errors import AdNotFoundError
 from dependencies import get_current_user, get_prediction_service
-from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -21,10 +20,6 @@ async def simple_predict(
     except AdNotFoundError as e:
         sentry_sdk.capture_exception(e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-class CloseAdInDto(BaseModel):
-    item_id: int
 
 
 @router.post('/close', status_code=status.HTTP_200_OK)

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from services.auth import AuthService
 from dependencies import get_auth_service
 
@@ -8,8 +8,8 @@ router = APIRouter()
 
 
 class LoginInDto(BaseModel):
-    login: str
-    password: str
+    login: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=1, max_length=1024)
 
 
 @router.post("/login")

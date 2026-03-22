@@ -9,7 +9,6 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import sentry_sdk
 from config import (
     KAFKA_BOOTSTRAP_SERVERS,
-    MODEL_PATH,
     WORKER_MAX_RETRIES,
     WORKER_RETRY_BASE_DELAY_SEC,
 )
@@ -18,7 +17,7 @@ from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
 from metrics import PREDICTION_DURATION, observe_prediction_metrics
-from ml.model import load_model
+from ml.model import load_inference_model
 from workers.retry_utils import exponential_backoff_seconds
 from logging_config import setup_app_logging
 
@@ -130,14 +129,7 @@ async def process_kafka_message_with_retries(
 async def consume():
     await init_db_pool()
 
-    try:
-        model = load_model(MODEL_PATH)
-    except FileNotFoundError:
-        logger.error(
-            "Model file not found: %s. Run: python train_model.py",
-            MODEL_PATH,
-        )
-        raise
+    model = load_inference_model()
 
     consumer = AIOKafkaConsumer(
         TOPIC_MODERATION,

@@ -12,8 +12,8 @@ from clients.postgres import init_db_pool, close_db_pool
 from clients.redis import init_redis_pool, close_redis_pool
 from clients.kafka import kafka_client
 from services.predict import PredictionService
-from config import MODEL_PATH, SENTRY_DSN, SENTRY_ENVIRONMENT
-from ml.model import load_model
+from config import SENTRY_DSN, SENTRY_ENVIRONMENT
+from ml.model import load_inference_model
 from logging_config import setup_app_logging
 import uvicorn
 import logging
@@ -41,15 +41,8 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing Kafka...")
     await kafka_client.start()
 
-    logger.info(f"Loading model from {MODEL_PATH}...")
-    try:
-        model = load_model(MODEL_PATH)
-    except FileNotFoundError:
-        logger.error(
-            "Model file not found: %s. Train and save first: python train_model.py",
-            MODEL_PATH,
-        )
-        raise
+    logger.info("Loading ML model...")
+    model = load_inference_model()
     app.state.prediction_service = PredictionService(model=model)
 
     logger.info("Application started")

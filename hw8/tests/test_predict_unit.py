@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
+from models.predict import PredictInDto
 from services.predict import PredictionService
-from errors import AdNotFoundError, PredictionError
+from errors import PredictionError
 
 
 @pytest.mark.asyncio
@@ -74,6 +75,31 @@ async def test_predict_model_unavailable_updates_metric():
             await service.predict_by_item_id(123)
 
     mock_errors.labels.assert_called_once_with(error_type="model_unavailable")
+
+
+@pytest.mark.asyncio
+async def test_predict_from_dto():
+    mock_model = MagicMock()
+    mock_model.predict.return_value = [1]
+    mock_model.predict_proba.return_value = [[0.2, 0.8]]
+    dto = PredictInDto(
+        seller_id=1,
+        is_verified_seller=False,
+        item_id=2,
+        name="Ad",
+        description="Some text here",
+        category=40,
+        images_qty=3,
+    )
+    with patch("services.predict.PREDICTION_DURATION") as mock_duration, patch(
+        "services.predict.observe_prediction_metrics"
+    ) as mock_obs:
+        service = PredictionService(model=mock_model)
+        result = await service.predict_from_dto(dto)
+    assert result.is_violation is True
+    assert result.probability == 0.8
+    mock_duration.observe.assert_called_once()
+    mock_obs.assert_called_once_with(True, 0.8)
 
 
 @pytest.mark.asyncio

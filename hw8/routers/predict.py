@@ -1,12 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 import sentry_sdk
-from models.predict import SimplePredictInDto, PredictOutDto, CloseAdInDto
+from models.predict import PredictInDto, SimplePredictInDto, PredictOutDto, CloseAdInDto
 from models.entities import Account
 from services.predict import PredictionService
-from errors import AdNotFoundError
+from errors import AdNotFoundError, PredictionError
 from dependencies import get_current_user, get_prediction_service
 
 router = APIRouter()
+
+
+@router.post("/predict", status_code=status.HTTP_200_OK, response_model=PredictOutDto)
+async def predict(
+    dto: PredictInDto,
+    current_user: Account = Depends(get_current_user),
+    service: PredictionService = Depends(get_prediction_service),
+) -> PredictOutDto:
+    """Синхронное предсказание по переданным полям (без чтения объявления из БД)."""
+    try:
+        return await service.predict_from_dto(dto)
+    except PredictionError as e:
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post('/simple_predict', status_code=status.HTTP_200_OK, response_model=PredictOutDto)

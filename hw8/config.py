@@ -8,6 +8,15 @@ DATABASE_URL = os.getenv(
 
 MODEL_PATH = os.getenv("MODEL_PATH", "model.pkl")
 
+# MLflow Model Registry (docker-compose сервис mlflow на :5000)
+USE_MLFLOW = os.getenv("USE_MLFLOW", "false").lower() == "true"
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+MLFLOW_MODEL_NAME = os.getenv("MLFLOW_MODEL_NAME", "moderation_model")
+MLFLOW_MODEL_URI = os.getenv(
+    "MLFLOW_MODEL_URI",
+    f"models:/{MLFLOW_MODEL_NAME}/latest",
+)
+
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")

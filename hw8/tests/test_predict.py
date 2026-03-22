@@ -7,6 +7,24 @@ from unittest.mock import AsyncMock, patch
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_predict_endpoint(app_client_logged_in: AsyncClient):
+    body = {
+        "seller_id": 1,
+        "is_verified_seller": True,
+        "item_id": 1,
+        "name": "Test",
+        "description": "Long enough description text",
+        "category": 50,
+        "images_qty": 5,
+    }
+    response = await app_client_logged_in.post("/predict", json=body)
+    assert response.status_code == 200
+    data = response.json()
+    assert "is_violation" in data and "probability" in data
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_metrics_endpoint(app_client: AsyncClient):
     response = await app_client.get("/metrics")
 

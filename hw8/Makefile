@@ -9,8 +9,10 @@ export REDIS_HOST ?= localhost
 export REDIS_PORT ?= 6379
 export MODEL_PATH ?= model.pkl
 export LOG_LEVEL ?= INFO
+# Для USE_MLFLOW=true и train-model-mlflow
+export MLFLOW_TRACKING_URI ?= http://127.0.0.1:5000
 
-.PHONY: up down migrate train-model run worker test test-unit
+.PHONY: up down migrate train-model train-model-mlflow run worker test test-unit
 
 # Поднять Postgres, Redis, Redpanda, Console, Prometheus, Grafana
 up:
@@ -27,7 +29,11 @@ migrate:
 train-model:
 	python3 train_model.py
 
-# API на :8003 (нужны: up + migrate + train-model)
+# То же + регистрация в MLflow (нужен запущенный контейнер mlflow на :5000)
+train-model-mlflow:
+	MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI) python3 train_model.py
+
+# API на :8003 (нужны: up + migrate + train-model или MLflow)
 run:
 	python3 main.py
 

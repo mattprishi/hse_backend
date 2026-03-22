@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from time import perf_counter
 import sentry_sdk
-from models.predict import PredictOutDto
+from models.predict import PredictInDto, PredictOutDto
 from errors import PredictionError, AdNotFoundError
 from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
@@ -11,8 +11,9 @@ from metrics import (
     PREDICTION_ERRORS_TOTAL,
     observe_prediction_metrics,
 )
-import numpy as np
 import logging
+
+from ml.model import build_feature_row
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +52,13 @@ class PredictionService:
             f"desc_len={len(ad_data['description'])}, "
             f"category={ad_data['category']}"
         )
-        
-        features = np.array([[
-            1.0 if ad_data['is_verified_seller'] else 0.0,
-            ad_data['images_qty'] / 10.0,
-            len(ad_data['description']) / 1000.0,
-            ad_data['category'] / 100.0,
-        ]])
+
+        features = build_feature_row(
+            bool(ad_data["is_verified_seller"]),
+            int(ad_data["images_qty"]),
+            str(ad_data["description"]),
+            int(ad_data["category"]),
+        )
         
         try:
             started_at = perf_counter()
@@ -82,6 +83,40 @@ class PredictionService:
         except Exception as e:
             PREDICTION_ERRORS_TOTAL.labels(error_type="prediction_error").inc()
             logger.exception("Prediction error")
+            sentry_sdk.capture_exception(e)
+            raise PredictionError(f"Prediction failed: {str(e)}")
+
+    async def predict_from_dto(self, dto: PredictInDto) -> PredictOutDto:
+        """Прямой инференс по признакам (без БД и кэша), эндпоинт POST /predict."""
+        if self.model is None:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="model_unavailable").inc()
+            exc = PredictionError("Model not loaded")
+            sentry_sdk.capture_exception(exc)
+            raise exc
+
+        logger.info(
+            "predict /predict: item_id=%s seller_id=%s category=%s",
+            dto.item_id,
+            dto.seller_id,
+            dto.category,
+        )
+        features = build_feature_row(
+            dto.is_verified_seller,
+            dto.images_qty,
+            dto.description,
+            dto.category,
+        )
+        try:
+            started_at = perf_counter()
+            prediction = int(self.model.predict(features)[0])
+            probability = float(self.model.predict_proba(features)[0][1])
+            PREDICTION_DURATION.observe(perf_counter() - started_at)
+            is_violation = bool(prediction)
+            observe_prediction_metrics(is_violation, probability)
+            return PredictOutDto(is_violation=is_violation, probability=probability)
+        except Exception as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="prediction_error").inc()
+            logger.exception("Prediction error (/predict)")
             sentry_sdk.capture_exception(e)
             raise PredictionError(f"Prediction failed: {str(e)}")
 

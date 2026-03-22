@@ -52,6 +52,18 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  mlflow:
+    image: python:3.11-slim-bookworm
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    working_dir: /mlflow
+    command:
+      - bash
+      - -c
+      - pip install --no-cache-dir -q mlflow==2.14.3 && exec mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts
+
   grafana:
     image: grafana/grafana:latest
     environment:
@@ -70,3 +82,4 @@ volumes:
   pgdata:
   redis_data:
   grafana_data:
+  mlflow_data:

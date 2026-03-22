@@ -1,6 +1,4 @@
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -15,13 +13,9 @@ from clients.redis import init_redis_pool, close_redis_pool
 from clients.kafka import kafka_client
 from services.predict import PredictionService
 from config import MODEL_PATH, SENTRY_DSN, SENTRY_ENVIRONMENT
+from ml.model import load_or_train_model
 import uvicorn
 import logging
-import sys
-import os
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'hw2'))
-from model import load_or_train_model
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,24 +33,8 @@ if SENTRY_DSN:
     )
 
 
-@dataclass
-class AppState:
-    prediction_service: PredictionService
-
-
-_app_state: Optional[AppState] = None
-
-
-def get_app_state() -> AppState:
-    if _app_state is None:
-        raise RuntimeError("App state not initialized")
-    return _app_state
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _app_state
-
     logger.info("Initializing database pool...")
     await init_db_pool()
 
@@ -68,8 +46,7 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"Loading model from {MODEL_PATH}...")
     model = load_or_train_model(MODEL_PATH)
-
-    _app_state = AppState(prediction_service=PredictionService(model=model))
+    app.state.prediction_service = PredictionService(model=model)
 
     logger.info("Application started")
     yield

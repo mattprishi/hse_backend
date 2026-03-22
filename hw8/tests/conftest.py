@@ -4,13 +4,10 @@ import asyncio
 from httpx import AsyncClient, ASGITransport
 import asyncpg
 
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DATABASE_URL, MODEL_PATH
-import main as main_module
-from main import app, get_app_state
+from main import app
 from repositories.users import UserRepository
 from repositories.ads import AdRepository
 from repositories.accounts import AccountRepository
@@ -36,22 +33,22 @@ async def init_pool(event_loop):
 
 @pytest.fixture(scope="session")
 async def init_app_state(init_pool):
-    """Инициализирует app state (модель + PredictionService) для тестов API."""
-    from model import load_or_train_model
+    """Инициализирует app.state.prediction_service для тестов API (без полного lifespan)."""
+    from ml.model import load_or_train_model
     from services.predict import PredictionService
     from clients.kafka import kafka_client
     model = load_or_train_model(MODEL_PATH)
-    main_module._app_state = main_module.AppState(prediction_service=PredictionService(model=model))
+    app.state.prediction_service = PredictionService(model=model)
     try:
         await kafka_client.start()
-    except:
+    except Exception:
         pass
     yield
     try:
         await kafka_client.stop()
-    except:
+    except Exception:
         pass
-    main_module._app_state = None
+    del app.state.prediction_service
 
 
 @pytest.fixture(scope="session")

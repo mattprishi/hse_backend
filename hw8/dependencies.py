@@ -1,8 +1,13 @@
 from typing import Optional
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from models.entities import Account
 from services.auth import AuthService
+from services.predict import PredictionService
 from repositories.accounts import AccountRepository
+
+
+def get_prediction_service(request: Request) -> PredictionService:
+    return request.app.state.prediction_service
 
 
 def get_auth_service() -> AuthService:

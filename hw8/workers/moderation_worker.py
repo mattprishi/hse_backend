@@ -11,12 +11,8 @@ from repositories.ads import AdRepository
 from repositories.moderation_results import ModerationResultRepository
 from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
 from metrics import PREDICTION_DURATION, observe_prediction_metrics
-import sys
-import os
-
-# sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'hw2'))
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'hw2'))
-from model import load_or_train_model
+from config import MODEL_PATH
+from ml.model import load_or_train_model
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -87,7 +83,7 @@ async def update_db_status_failed(item_id: int, error_msg: str):
 async def consume():
     await init_db_pool()
 
-    model = load_or_train_model("model.pkl")
+    model = load_or_train_model(MODEL_PATH)
 
     consumer = AIOKafkaConsumer(
         TOPIC_MODERATION,

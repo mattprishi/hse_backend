@@ -4,15 +4,10 @@ from models.predict import SimplePredictInDto, PredictOutDto
 from models.entities import Account
 from services.predict import PredictionService
 from errors import AdNotFoundError
-from dependencies import get_current_user
+from dependencies import get_current_user, get_prediction_service
 from pydantic import BaseModel
 
 router = APIRouter()
-
-
-def get_prediction_service() -> PredictionService:
-    from main import get_app_state
-    return get_app_state().prediction_service
 
 
 @router.post('/simple_predict', status_code=status.HTTP_200_OK, response_model=PredictOutDto)

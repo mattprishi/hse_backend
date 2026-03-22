@@ -18,8 +18,9 @@ from clients.kafka import TOPIC_MODERATION, TOPIC_DLQ
 from metrics import PREDICTION_DURATION, observe_prediction_metrics
 from ml.model import load_or_train_model
 from workers.retry_utils import exponential_backoff_seconds
+from logging_config import setup_app_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_app_logging()
 logger = logging.getLogger(__name__)
 
 

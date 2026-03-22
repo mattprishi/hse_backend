@@ -14,14 +14,11 @@ from clients.kafka import kafka_client
 from services.predict import PredictionService
 from config import MODEL_PATH, SENTRY_DSN, SENTRY_ENVIRONMENT
 from ml.model import load_or_train_model
+from logging_config import setup_app_logging
 import uvicorn
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
+setup_app_logging()
 logger = logging.getLogger(__name__)
 
 if SENTRY_DSN:

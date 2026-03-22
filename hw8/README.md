@@ -1,56 +1,49 @@
-# HW5: Redis Caching
+# Модерация объявлений (hw8)
 
-Кэширование результатов предсказаний с использованием Redis.
+## Запуск (как в hw6: один compose + Makefile)
 
-## Setup
-
-### 1. Start infrastructure
+### 1. Инфраструктура
 
 ```bash
-docker-compose up -d
+make up
 ```
 
-Это запустит:
-- PostgreSQL на порту 5433
-- Redpanda (Kafka) на порту 9092
-- Redpanda Console на http://localhost:8080
-- Redis на порту 6379
+Поднимется: PostgreSQL **5435** (БД `hw`), Redis **6379**, Redpanda (Kafka) **9092**, Redpanda Console **8080**, Prometheus **9090**, Grafana **3000** (admin / admin).
 
-### 2. Run migrations
+### 2. Миграции
 
 ```bash
-psql -d moderation -U user -h localhost -p 5433 -f migrations/V01__init_schema.sql
-psql -d moderation -U user -h localhost -p 5433 -f migrations/V02__moderation_results.sql
-psql -d moderation -U user -h localhost -p 5433 -f migrations/V03__add_is_closed.sql
+make migrate
 ```
 
-### 3. Install dependencies
+(нужен `psql` в PATH; `DATABASE_URL` можно не задавать — см. `Makefile`)
+
+### 3. Зависимости
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment
+### 4. Переменные (опционально)
+
+Дефолты совпадают с `config.py`: `DATABASE_URL`, `KAFKA_BOOTSTRAP_SERVERS`, `REDIS_*`, `MODEL_PATH`, `LOG_LEVEL`.
+
+### 5. API и воркер
+
+Терминал 1 — API (**:8003**):
 
 ```bash
-export DATABASE_URL="postgresql://user@localhost:5433/moderation"
-export MODEL_PATH="model.pkl"
-export KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
-export REDIS_HOST="localhost"
-export REDIS_PORT="6379"
+make run
 ```
 
-### 5. Run application
+Терминал 2 — воркер Kafka:
 
-Terminal 1 - API server:
 ```bash
-python main.py
+make worker
 ```
 
-Terminal 2 - Worker:
-```bash
-python -m workers.moderation_worker
-```
+- Метрики API: `http://localhost:8003/metrics` (Prometheus в Docker скрейпит `host.docker.internal:8003`).
+- Grafana: `http://localhost:3000`, дашборды из `grafana/dashboards/`.
 
 ## API Endpoints
 
@@ -116,19 +109,9 @@ POST /async_predict?item_id=1
 - **Pattern**: Cache-Aside (проверка кэша → БД → запись в кэш)
 - **Invalidation**: При закрытии объявления
 
-## Run Tests
+## Тесты
 
-Все тесты:
 ```bash
-pytest tests/ -v
-```
-
-Только интеграционные:
-```bash
-pytest -m integration -v
-```
-
-Только юнит-тесты:
-```bash
-pytest -m "not integration" -v
+make test-unit    # без Docker
+make test         # нужны make up && make migrate
 ```
